@@ -48,14 +48,14 @@ def executer_power():
 @function_tool  
 def load_json_network(file_path: str):
     """
-    Loads power flow results from a JSON file and returns a pandapower object.
-    :param file_path: Path to the JSON file containing power flow results.
+    Loads power flow results from a JSON file and returns a dataframe object.
+    :param file_path: Path to the JSON file containing the network.
 
     :return: Pandapower network object as dataframes.
     """
     print("Loading results from ...", file_path)
     with open(file_path, 'r') as f:
-        df = pp.from_json(f)
+        df = js.load(f)
     if df is not None:
         
         return df
@@ -124,29 +124,25 @@ Begin with a concise checklist (3-7 bullets) of your sub-tasks before writing co
 
 
 power_agent_instructions = """
-# Role and Objective
-You are an expert electrical power systems analyst.
-Your task is to answer questions about an electrical network concisely and precisely.
+Developer: Developer: # Role and Objective
+You are a power systems analysis agent dedicated to delivering concise and precise answers to questions involving electrical grids or networks.
+Ground your response strictly on the network provided as a json file. Do not make assumptions beyond the data in this file or hallucinate information.
 
 # Instructions
-When answering:
-- Be technically accurate.
-- Be concise: focus only on key quantities, values, and summaries (avoid long prose).
-- Use clear and structured formatting (tables, short lists, or short paragraphs).
-- Include units (e.g., MW, MVAR, kV, pu) when relevant.
-- When asked for plots or diagrams, describe the figure clearly or return data in a structured format suitable for plotting (JSON, CSV-like table).
-- When calculations are requested, briefly state the formula or method used before presenting results.
-- When reasoning is requested (e.g., "how to decrease losses"), give 2–3 technically sound actions.
-
-If information is missing or ambiguous, state assumptions explicitly but keep the answer short.
-# tools
-You have access to the following tools:
-- load_json_network: Loads a pandapower network from a JSON file.
-- WebSearchTool: A tool that allows you to search the web for up-to-date information.
-- code_interpreter: A tool that allows you to write and execute python code. Use this tool for any calculations, data analysis, or generating plots and diagrams.
+1. Begin with a high-level checklist (3–7 bullets) outlining the conceptual steps required to address the user's question. Keep checklist items at the conceptual level.
+2. Use only these tools: 'load_json_network', and the code interpreter. Auto-invoke tools for routine read-only operations; for destructive or irreversible actions, require explicit user confirmation beforehand.
+3. State the purpose and minimal required inputs before each significant tool call.
+4. Use the code interpreter to run Python code. For simple questions (e.g., network name, number of voltages), answer directly from the dataframe without overcomplicating or additional reasoning. Be clear and concise. When writing code, include relevant visualizations and dataframes (pandas) as appropriate.
+5. Never open or load a file in the code interpreter; always use the provided tool `load_json_network` to load the network from a json file.
+6. If necessary, break down complex questions into sub-questions, reasoning stepwise before implementation. Set reasoning_effort = medium unless task complexity is minimal or high.
+7. Develop a structured plan to address the user's question before implementation.
+8. After each tool call, validate the result in 1–2 sentences. If results do not meet success criteria, attempt a minimal correction or clarify assumptions before proceeding.
+9. When further information is required, use available libraries and resources within the code interpreter to provide references or foundational knowledge as needed.
+10. At key milestones, provide succinct micro-updates (1–3 sentences) summarizing progress, next steps, and any blockers.
+11. You can use local path for the network since 'load_json_network' tool will be used on the local path.
 
 # Output Format
-Be cold and concise.
+Be cold, concise, and brief. Present final answers using markdown, including relevant tables or plots. Include any executed Python code in block code. Always output the original user question.
 """
 
 
@@ -182,19 +178,6 @@ class PSSE_Agent:
             model="gpt-5",
             tools=[
                 load_json_network,
-                WebSearchTool(),
-                # self.pandas_coder.as_tool(
-                #     tool_name="pandas_coder",
-                #     tool_description="A tool that writes pandas code to answer questions about dataframes."
-                # ),
-                # self.pandapower_coder.as_tool(
-                #     tool_name="pandapower_coder",
-                #     tool_description="A tool that writes pandapower code to answer questions about power systems networks"
-                # ),
-                # self.graphs_and_visulization_coder.as_tool(
-                #     tool_name="graphs_and_visualization_coder",
-                #     tool_description="A tool that writes code to generate graphs and visualizations."
-                # ),
                  code_interpreter
             ],
             instructions=power_agent_instructions,
@@ -326,72 +309,129 @@ markdown_agent = Agent(
     instructions=markdown_instruction
     )
 
-async def main():
-    """
-    Main asynchronous function that iterates through different question types,
-    runs a power system analysis agent on each question, and saves the results
-    and generated files in organized folders.
-    """
+# async def main():
+#     """
+#     Main asynchronous function that iterates through different question types,
+#     runs a power system analysis agent on each question, and saves the results
+#     and generated files in organized folders.
+#     """
 
-    # Initialize the PSSE agent (power systems simulation agent)
-    agent = PSSE_Agent().power_agent
+#     # Initialize the PSSE agent (power systems simulation agent)
+#     agent = PSSE_Agent().power_agent
 
-    # Base directory where all results will be stored
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/questions/iteration 16/"
+#     # Base directory where all results will be stored
+#     base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/questions/iteration 19/"
 
-    # Loop through all question types and their corresponding question lists
-    for question_type, questions in all_questions.items():
-        # Create a directory for each question type
-        question_type_dir = os.path.join(base_directory, question_type)
-        os.makedirs(question_type_dir, exist_ok=True)
-        print(f"\n--- {question_type.upper()} QUESTIONS ---")
+#     # Loop through all question types and their corresponding question lists
+#     for question_type, questions in all_questions.items():
+#         # Create a directory for each question type
+#         question_type_dir = os.path.join(base_directory, question_type)
+#         os.makedirs(question_type_dir, exist_ok=True)
+#         print(f"\n--- {question_type.upper()} QUESTIONS ---")
 
-        # Iterate through each question in the current type
-        for i, question in enumerate(questions, start=1):
-            print(f"\nQuestion {i}: {question}")
+#         # Iterate through each question in the current type
+#         for i, question in enumerate(questions, start=1):
+#             print(f"\nQuestion {i}: {question}")
 
-            # Create a directory for each specific question
-            specific_question_dir = os.path.join(question_type_dir, f"Question {i}")
-            os.makedirs(specific_question_dir, exist_ok=True)
+#             # Create a directory for each specific question
+#             specific_question_dir = os.path.join(question_type_dir, f"Question {i}")
+#             os.makedirs(specific_question_dir, exist_ok=True)
 
-            # Append instruction to save power flow results to a specific file
-            modified_question = (
-                question + " on the following json file: /Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
-            )
+#             # Append instruction to save power flow results to a specific file
+#             modified_question = (
+#                 question + " on the following json file: /Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
+#             )
 
-            # Run the agent asynchronously and get the result
-            result = await Runner.run(agent, modified_question)
+#             # Run the agent asynchronously and get the result
+#             result = await Runner.run(agent, modified_question)
 
-            # Print and save the final output text
-            print(result.final_output)
-            # output_path = os.path.join(specific_question_dir, "output.txt")
-            # with open(output_path, "w") as file:
-            #     file.write(result.final_output)
+#             # Print and save the final output text
+#             print(result.final_output)
+#             # output_path = os.path.join(specific_question_dir, "output.txt")
+#             # with open(output_path, "w") as file:
+#             #     file.write(result.final_output)
 
-            await Runner.run(markdown_agent, result.final_output)
+#             await Runner.run(markdown_agent, result.final_output)
 
-            # List all files created by the container and retrieve their contents
-            print("\nFiles generated in the container:")
-            for file in client.containers.files.list(container.id):
-                print(f" - {file.path}")
+#             # List all files created by the container and retrieve their contents
+#             print("\nFiles generated in the container:")
+#             for file in client.containers.files.list(container.id):
+#                 print(f" - {file.path}")
 
-                # Retrieve and save each file to the specific question directory
-                destination_path = os.path.join(
-                    specific_question_dir,
-                    os.path.basename(file.path)
-                )
-                client.containers.files.content.retrieve(
-                    file_id=file.id,
-                    container_id=container.id
-                ).write_to_file(destination_path)
+#                 # Retrieve and save each file to the specific question directory
+#                 destination_path = os.path.join(
+#                     specific_question_dir,
+#                     os.path.basename(file.path)
+#                 )
+#                 client.containers.files.content.retrieve(
+#                     file_id=file.id,
+#                     container_id=container.id
+#                 ).write_to_file(destination_path)
 
-            # Clean container files before each question
-            for file in client.containers.files.list(container.id):
-                client.containers.files.delete(file_id=file.id, container_id=container.id)
+#             # Clean container files before each question
+#             for file in client.containers.files.list(container.id):
+#                 client.containers.files.delete(file_id=file.id, container_id=container.id)
 
-            print("\n")  # Separate questions visually in logs
+#             print("\n")  # Separate questions visually in logs
 
     
+
+# if __name__ == "__main__":
+#     asyncio.run(main())
+
+async def main():
+    """
+    Boucle de conversation CLI avec le PSSE agent.
+    Chaque tour, l'utilisateur entre une question,
+    le modèle répond, et on nettoie les fichiers générés.
+    """
+
+    # Initialisation de l'agent PSSE
+    agent = PSSE_Agent().power_agent
+
+    # Base directory pour les sauvegardes
+    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_2/"
+    os.makedirs(base_directory, exist_ok=True)
+
+    print("=== Conversation avec le PSSE Agent ===")
+    print("Tape 'exit' pour quitter.\n")
+
+    i = 1  # compteur de questions
+
+    while True:
+        # Lecture de la question
+        user_input = input(f"\nQuestion {i}: ").strip()
+        if user_input.lower() in {"exit", "quit"}:
+            print("\nConversation terminée.")
+            break
+
+        # Ajout d'une instruction de sauvegarde pour le power flow
+        modified_question = (
+            user_input + " on the following json file: "
+            "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
+        )
+
+        # Exécution de l'agent
+        result = await Runner.run(agent, modified_question)
+
+        # Affichage du résultat
+        print("\n--- Réponse de l'agent ---")
+        print(result.final_output)
+
+        # Sauvegarde dans un fichier texte
+        question_dir = os.path.join(base_directory, f"Question_{i}")
+        os.makedirs(question_dir, exist_ok=True)
+        with open(os.path.join(question_dir, "output.txt"), "w") as f:
+            f.write(result.final_output)
+
+        # Nettoyage éventuel du conteneur si nécessaire
+        try:
+            for file in client.containers.files.list(container.id):
+                client.containers.files.delete(file_id=file.id, container_id=container.id)
+        except Exception as e:
+            print(f"(Avertissement : impossible de nettoyer le conteneur — {e})")
+
+        i += 1
 
 if __name__ == "__main__":
     asyncio.run(main())
