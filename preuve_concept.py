@@ -1,8 +1,9 @@
+from typing import Any
 from agents import Agent, ModelSettings,Runner, WebSearchTool, function_tool, CodeInterpreterTool
 import pandapower as pp
 import pandapower.networks as pn
 import asyncio
-from pandapower.networks.power_system_test_cases import case30
+from pandapower.networks.power_system_test_cases import case30, case1888rte, case300, case118
 from openai.types.shared import Reasoning
 
 from pandapower.file_io import to_json
@@ -10,116 +11,16 @@ import json as js
 from openai import OpenAI
 import shutil
 import os
+from agents.mcp import MCPServer, MCPServerStdio
 
 client = OpenAI()
 
 
-
-@function_tool
-def executer_power():
-    """
-    Executes a power flow calculation on a network/grid and saves the results to a JSON file.
-
-    :return: Success message with the path to the saved file.
-    """
-    output_path = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
-    print("Running power flow calculation...", output_path)
-    net = case30()
-    pp.run.runpp(net)
-    if net.converged:
-        to_json(net, output_path)
-        return f"Power flow calculation successful. Results saved to {output_path}."
-    else:
-        return "Power flow calculation did not converge."
-    
-# @function_tool
-# def load_network():
-#     """
-#     Loads a sample power network and returns it.
-#     :return: Pandapower network object.
-#     """
-#     print("Loading network...")
-#     net = case30()
-#     pp.run.runpp(net)
-#     return net
-
-
-    
-@function_tool  
-def load_json_network(file_path: str):
-    """
-    Loads power flow results from a JSON file and returns a dataframe object.
-    :param file_path: Path to the JSON file containing the network.
-
-    :return: Pandapower network object as dataframes.
-    """
-    print("Loading results from ...", file_path)
-    with open(file_path, 'r') as f:
-        df = js.load(f)
-    if df is not None:
-        
-        return df
-    else:
-        return "Failed to load network from JSON."
     
 container = client.containers.create(name="test-container")
 
 code_interpreter = CodeInterpreterTool(tool_config={"type": "code_interpreter", "container": container.id})
 
-pandas_coder_instructions = """
-# Role and Objective
-You are a pandas and pandapower coding agent responsible for generating Python code to answer user questions using pandas and pandapower.
-# Instructions
-Begin with a concise checklist (3-7 bullets) of your sub-tasks before writing code; keep items conceptual, not implementation-level.
-1. Load the pandapower network using the tool `load_json_network`.
-2. Analyze the provided dataframe to understand its structure and contents. Include this analysis as concise comments immediately before your code block.
-3. Write Python code to solve the user's question using pandas.
-4. Before executing, state in one line why code execution is needed and the minimal input(s) involved.
-5. Execute your code using the code interpreter tool to retrieve the results.
-6. After execution, briefly validate if the output matches expectations; if validation fails, attempt a minimal self-correction or display an appropriate error message.
-7. Present the outputs as described below. If code or data errors occur, display an error message accordingly.
-# Output Format
-- Display the results first as a Markdown table. If the result is not tabular, present it in JSON format within a Markdown code block.
-- After presenting the result, include your Python code in a Markdown code block.
-- Precede the code block with your dataframe analysis as concise comments.
-- If execution fails due to code or data issues, output an error message inside a Markdown code block labeled 'Error'.
-
-"""
-
-pandapower_coder_instructions = """
-# Role and Objective
-You are a pandapower (python library) coding agent that uses panadpower to analyze and manipulate power system networks and answer user questions.
-# Instructions
-Begin with a concise checklist (3-7 bullets) of your sub-tasks before writing code; keep items conceptual, not implementation-level.
-1. Load the pandapower network using the tool `load_json_network`.
-2. Analyze the provided pandapower network to understand its structure and contents. Include this analysis as concise comments immediately before your code block.
-3. Write Python code to solve the user's question using pandapower. You can search the web for pandapower documentation if needed.
-4. Before executing, state in one line why code execution is needed and the minimal input(s) involved.
-5. Execute your code using the code interpreter tool to retrieve the results.
-6. After execution, briefly validate if the output matches expectations; if validation fails, attempt a minimal self-correction or display an appropriate error message.
-7. Present the outputs as described below. If code or data errors occur, display an error message accordingly.
-# Output Format
-- Display the results first as a Markdown table. If the result is not tabular, present it in JSON format within a Markdown code block.
-- After presenting the result, include your Python code in a Markdown code block.
-- Precede the code block with your dataframe analysis as concise comments.
-- If execution fails due to code or data issues, output an error message inside a Markdown code block labeled 'Error'.
-"""
-
-graphs_and_visualization_instructions = """
-# Role and Objective
-You are a graphs and visualization coding agent responsible for generating graphs and visualizations to answer user questions.
-# Instructions
-Begin with a concise checklist (3-7 bullets) of your sub-tasks before writing code; keep items conceptual, not implementation-level.
-1. Load the pandapower network using the tool `load_json_network`.
-2. Analyze the provided data to understand its structure and contents. Include this analysis as concise comments immediately before your code block.
-3. Write Python code to generate graphs and visualizations to solve the user's question using libraries such as matplotlib, seaborn, or plotly. You can search the web for documentation if needed.
-4. Execute your code using the code interpreter tool to generate the visualizations.
-5. After execution, briefly validate if the output matches expectations; if validation fails, attempt a minimal self-correction or display an appropriate error message.
-6. Present the outputs as described below. If code or data errors occur, display an error message accordingly.
-# Output Format
-- Display the generated graphs and visualizations first as embedded images in Markdown format.
-- If execution fails due to code or data issues, output an error message inside a Markdown code block labeled 'Error'.
-"""
 
 
 
@@ -148,58 +49,108 @@ Be cold, concise, and brief. Present final answers using markdown, including rel
 
 
 class PSSE_Agent:
-    def __init__(self):
-        # self.pandas_coder = Agent(
-        #     name="Pandas Coder",
-        #     model="gpt-5",
-        #     tools=[code_interpreter,load_json_network],
-        #     instructions=pandas_coder_instructions,
-        #     model_settings=ModelSettings(reasoning=Reasoning(effort="high"))
-        # )
+    def __init__(self, mcp_server: MCPServer):
 
-        # self.graphs_and_visulization_coder = Agent(
-        #     name="Graphs and Visualization Coder",
-        #     model="gpt-5",
-        #     tools=[code_interpreter, WebSearchTool, load_json_network],
-        #     instructions=graphs_and_visualization_instructions,
-        #     model_settings=ModelSettings(reasoning=Reasoning(effort="high"))
-        #     )
-
-        # self.pandapower_coder = Agent(
-        #     name="Pandapower Coder",
-        #     model="gpt-5",
-        #     tools=[code_interpreter, WebSearchTool, load_json_network],
-        #     instructions=pandapower_coder_instructions,
-        #     model_settings=ModelSettings(reasoning=Reasoning(effort="high"))
-        # )
+        self.network : pp.pandapowerNet = None
 
         self.power_agent = Agent(
             name="Power Systems Analysis Agent",
             model="gpt-5",
             tools=[
-                load_json_network,
-                 code_interpreter
+    #            self.load_json_network,
+  #              self.get_network_case,
+                 code_interpreter,
             ],
             instructions=power_agent_instructions,
-  #          model_settings=ModelSettings(reasoning=Reasoning(effort="high"))
-            
-            
+            mcp_servers=[mcp_server]
+  #          model_settings=ModelSettings(reasoning=Reasoning(effort="high"))            
         )
 
-        # self.planner = Agent(
-        #     name="Planner",
-        #     model="gpt-5",
-        #     instructions="""
-        #     """)
-        
-        # self.pandaspower_coder = Agent(
-
-        # )
         
     def run(self, question: str):
 
 
         pass
+
+    @function_tool
+    def get_network_case(self: str,case_name: str) -> pp.pandapowerNet | str:
+        """
+        Retrieves a predefined pandapower network case by name.
+
+        :param case_name: Name of the network case to retrieve ['case30', 'case118', 'case300', 'case1888rte']
+
+        :return: The requested pandapower network object or an error message if the case is not found.
+        """
+        cases = {
+            "case30": case30,
+            "case118": case118,
+            "case300": case300,
+            "case1888rte": case1888rte
+        }
+
+        self.network = cases[case_name]()
+        
+        if case_name in cases:
+            return cases[case_name]()
+        else:
+            return f"Case '{case_name}' not found. Available cases: {', '.join(cases.keys())}."
+
+    @function_tool
+    def run_power_flow(self: str, algorithm: str = 'nr', 
+                       calculate_voltage_angles: bool = True, 
+                        max_iteration: int = 10, 
+                        tolerance_mva: float = 1e-8):
+        """
+        Executes a power flow calculation on the current network/grid.
+        :param algorithm: Power flow algorithm ('nr' for Newton-Raphson, 'bfsw' for backward/forward sweep)
+        :param calculate_voltage_angles: Whether to calculate voltage angles.
+        :param max_iteration: Maximum number of iterations for the power flow calculation.
+        :param tolerance_mva: Convergence tolerance in MVA.
+        """
+
+        pp.runpp(self.network, algorithm=algorithm, calculate_voltage_angles=calculate_voltage_angles,
+                max_iteration=max_iteration, tolerance_mva=tolerance_mva)
+        
+       
+        pass
+
+
+    @function_tool
+    def executer_power(self: str):
+        """
+        Executes a power flow calculation on a network/grid and saves the results to a JSON file.
+
+        :return: Success message with the path to the saved file.
+        """
+        output_path = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
+        print("Running power flow calculation...", output_path)
+        net = case30()
+        pp.run.runpp(net)
+        if net.converged:
+            to_json(net, output_path)
+            return f"Power flow calculation successful. Results saved to {output_path}."
+        else:
+            return "Power flow calculation did not converge."
+        
+
+
+        
+    @function_tool  
+    def load_json_network(self: str,file_path: str):
+        """
+        Loads power flow results from a JSON file and returns a dataframe object.
+        :param file_path: Path to the JSON file containing the network.
+
+        :return: Pandapower network object as dataframes.
+        """
+        print("Loading results from ...", file_path)
+        with open(file_path, 'r') as f:
+            df = js.load(f)
+        if df is not None:
+            
+            return df
+        else:
+            return "Failed to load network from JSON."
         
 
         
@@ -262,8 +213,8 @@ calculation_questions = [
 
 
 plot_qestions = [
-    "Plot all the voltages",
-    "Plot all the calculated values by component. Replot using sorted calculated values.",
+ #   "Plot all the voltages",
+ #   "Plot all the calculated values by component. Replot using sorted calculated values.",
     "I am interested in the voltage profiles from the generation to the load. Provide plots with the buses ordered by connectivity. Are there any places in the network which the voltage needs to be better supported? Replot the voltages and angles sorted by increasing values."
 ]
 
@@ -271,12 +222,12 @@ plot_qestions = [
 
 
 reasoning_questions = [
-    "Provide a network summary",
-    "Provide a network summary with a statistical analysis.",
-    "Show me graphs and tables which would help me better understand the network.",
+ #   "Provide a network summary",
+#    "Provide a network summary with a statistical analysis.",
+#    "Show me graphs and tables which would help me better understand the network.",
     "How can I decrease the loading of the most heavily loaded line? Which actions should I perform?",
     "How can I decrease network losses?",
-    "What is the weakest part of the network?",
+#    "What is the weakest part of the network?",
     "If I was to add a voltage support element such as a SVC, where would be the best place to add it?"
 ]
 
@@ -285,11 +236,11 @@ diagram_questions = [
 ]
 
 all_questions = {
-    "general": general_questions,
-    "structure": structure_questions,
-    "limits": limit_questions,
-    "calculations": calculation_questions,
-    "plots": plot_qestions,
+#    "general": general_questions,
+#    "structure": structure_questions,
+#    "limits": limit_questions,
+#    "calculations": calculation_questions,
+#    "plots": plot_qestions,
     "reasoning": reasoning_questions,
     "diagrams": diagram_questions
 }
@@ -320,7 +271,7 @@ markdown_agent = Agent(
 #     agent = PSSE_Agent().power_agent
 
 #     # Base directory where all results will be stored
-#     base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/questions/iteration 19/"
+#     base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/questions/iteration 22/"
 
 #     # Loop through all question types and their corresponding question lists
 #     for question_type, questions in all_questions.items():
@@ -386,52 +337,62 @@ async def main():
     le modèle répond, et on nettoie les fichiers générés.
     """
 
+    async with MCPServerStdio(
+        name="Pandapower MCP Server",
+        params={"command": "python",
+                "args": ["/Users/philippebergeron/Documents/Agent_Psse/PowerMCP/pandapower/panda_mcp.py"]
+                },
+        cache_tools_list=True
+        ) as server:
+
+        
+
     # Initialisation de l'agent PSSE
-    agent = PSSE_Agent().power_agent
+        agent = PSSE_Agent(server).power_agent
 
-    # Base directory pour les sauvegardes
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_2/"
-    os.makedirs(base_directory, exist_ok=True)
+        # Base directory pour les sauvegardes
+        base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_4/"
+        os.makedirs(base_directory, exist_ok=True)
 
-    print("=== Conversation avec le PSSE Agent ===")
-    print("Tape 'exit' pour quitter.\n")
+        print("=== Conversation avec le PSSE Agent ===")
+        print("Tape 'exit' pour quitter.\n")
 
-    i = 1  # compteur de questions
+        i = 1  # compteur de questions
 
-    while True:
-        # Lecture de la question
-        user_input = input(f"\nQuestion {i}: ").strip()
-        if user_input.lower() in {"exit", "quit"}:
-            print("\nConversation terminée.")
-            break
+        while True:
+            # Lecture de la question
+            user_input = input(f"\nQuestion {i}: ").strip()
+            if user_input.lower() in {"exit", "quit"}:
+                print("\nConversation terminée.")
+                break
 
-        # Ajout d'une instruction de sauvegarde pour le power flow
-        modified_question = (
-            user_input + " on the following json file: "
-            "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
-        )
+            # Ajout d'une instruction de sauvegarde pour le power flow
+            modified_question = (
+                user_input + " on the following json file: "
+                "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
+            )
 
-        # Exécution de l'agent
-        result = await Runner.run(agent, modified_question)
+            # Exécution de l'agent
+            result = await Runner.run(agent, modified_question)
 
-        # Affichage du résultat
-        print("\n--- Réponse de l'agent ---")
-        print(result.final_output)
+            # Affichage du résultat
+            print("\n--- Réponse de l'agent ---")
+            print(result.final_output)
 
-        # Sauvegarde dans un fichier texte
-        question_dir = os.path.join(base_directory, f"Question_{i}")
-        os.makedirs(question_dir, exist_ok=True)
-        with open(os.path.join(question_dir, "output.txt"), "w") as f:
-            f.write(result.final_output)
+            # Sauvegarde dans un fichier texte
+            question_dir = os.path.join(base_directory, f"Question_{i}")
+            os.makedirs(question_dir, exist_ok=True)
+            with open(os.path.join(question_dir, "output.txt"), "w") as f:
+                f.write(result.final_output)
 
-        # Nettoyage éventuel du conteneur si nécessaire
-        try:
-            for file in client.containers.files.list(container.id):
-                client.containers.files.delete(file_id=file.id, container_id=container.id)
-        except Exception as e:
-            print(f"(Avertissement : impossible de nettoyer le conteneur — {e})")
+            # Nettoyage éventuel du conteneur si nécessaire
+            try:
+                for file in client.containers.files.list(container.id):
+                    client.containers.files.delete(file_id=file.id, container_id=container.id)
+            except Exception as e:
+                print(f"(Avertissement : impossible de nettoyer le conteneur — {e})")
 
-        i += 1
+            i += 1
 
 if __name__ == "__main__":
     asyncio.run(main())
