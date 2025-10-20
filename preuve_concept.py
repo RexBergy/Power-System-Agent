@@ -173,63 +173,7 @@ def get_network_case(
     else:
         return f"Case '{case_name}' not found. Available cases: {', '.join(cases.keys())}."
 
-@function_tool
-def run_power_flow(run_context: RunContextWrapper[UserContext],
-                    algorithm: str = 'nr', 
-                    calculate_voltage_angles: bool = True, 
-                    max_iteration: int = 10, 
-                    tolerance_mva: float = 1e-8):
-    """
-    Executes a power flow calculation on the current network/grid.
-    :param algorithm: Power flow algorithm ('nr' for Newton-Raphson, 'bfsw' for backward/forward sweep)
-    :param calculate_voltage_angles: Whether to calculate voltage angles.
-    :param max_iteration: Maximum number of iterations for the power flow calculation.
-    :param tolerance_mva: Convergence tolerance in MVA.
-    """
-    network = run_context.context.network_case
-    pp.runpp(network,algorithm=algorithm, calculate_voltage_angles=calculate_voltage_angles,
-            max_iteration=max_iteration, tolerance_mva=tolerance_mva)
-    
-    
-    pass
 
-
-@function_tool
-def executer_power():
-    """
-    Executes a power flow calculation on a network/grid and saves the results to a JSON file.
-
-    :return: Success message with the path to the saved file.
-    """
-    output_path = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json"
-    print("Running power flow calculation...", output_path)
-    net = case30()
-    pp.run.runpp(net)
-    if net.converged:
-        to_json(net, output_path)
-        return f"Power flow calculation successful. Results saved to {output_path}."
-    else:
-        return "Power flow calculation did not converge."
-    
-
-
-    
-@function_tool  
-def load_json_network(self: str,file_path: str):
-    """
-    Loads power flow results from a JSON file and returns a dataframe object.
-    :param file_path: Path to the JSON file containing the network.
-
-    :return: Pandapower network object as dataframes.
-    """
-    print("Loading results from ...", file_path)
-    with open(file_path, 'r') as f:
-        df = js.load(f)
-    if df is not None:
-        
-        return df
-    else:
-        return "Failed to load network from JSON."
 
 
 async def main():
@@ -254,7 +198,7 @@ async def main():
     #     agent = PSSE_Agent(server)
 
         # Base directory pour les sauvegardes
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_25/"
+    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_27/"
     os.makedirs(base_directory, exist_ok=True)
 
     print("=== Conversation avec le PSSE Agent ===")
