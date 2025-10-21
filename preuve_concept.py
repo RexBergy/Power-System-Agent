@@ -198,7 +198,7 @@ async def main():
     #     agent = PSSE_Agent(server)
 
         # Base directory pour les sauvegardes
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_27/"
+    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_30/"
     os.makedirs(base_directory, exist_ok=True)
 
     print("=== Conversation avec le PSSE Agent ===")
