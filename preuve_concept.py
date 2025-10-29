@@ -1,38 +1,23 @@
 from dataclasses import dataclass
-from typing import Any, Literal
-from agents import Agent, ModelSettings, RunContextWrapper,Runner, WebSearchTool, function_tool, CodeInterpreterTool, SQLiteSession, FileSearchTool
+from typing import Literal
+from agents import Agent, ModelSettings, Runner, function_tool, CodeInterpreterTool, SQLiteSession
 import pandapower.networks as pn
 import asyncio
-from pandapower.networks.power_system_test_cases import case30, case1888rte, case300, case118
+from pandapower.networks.power_system_test_cases import case30, case1888rte, case300, case118, case2848rte
 from openai.types.shared import Reasoning
 
-from pandapower.file_io import to_json
-import json as js
 from openai import OpenAI
-import shutil
 import os
-from agents.mcp import MCPServer, MCPServerStdio
+from agents.mcp import MCPServerStdio
 import time
 from pydantic import BaseModel
 import pandapower as pp
 
 client = OpenAI()
 
-# client.files.create(
-#     file=open("/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/powerflow_results.json", "rb"),
-#     purpose="user_data"
-# )
     
 session = SQLiteSession("conversation_14")
 container = client.containers.create(name="test-container")
-# client.files.create(
-#     file=open('case.json', 'rb'),
-#     purpose="user_data"
-# )
-# client.containers.files.create(
-#     container_id=container.id,
-#     file=open("/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/case.json", "rb")
-#     )
 
 code_interpreter = CodeInterpreterTool(tool_config={"type": "code_interpreter", "container": container.id})
 
@@ -50,41 +35,81 @@ def upload_file_to_container(path: str):
             file=open(path, "rb"),
             
         )
-        
+        print(f"File '{created_file.path}' uploaded to container.")
         return f"File '{created_file.path}' uploaded to container."
     else:
         return f"File '{path}' does not exist."
+    
+
+# def timeseries():
+#     # load a pandapower network
+#     #net = mv_oberrhein(scenario='generation')
+#     # number of time steps
+#     n_ts = 95
+#     # load your timeseries from a file (here csv file)
+#     # df = pd.read_csv("sgen_timeseries.csv")
+#     # or create a DataFrame with some random time series as an example
+#     df = pd.DataFrame(np.random.normal(1., 0.1, size=(n_ts, len(net.sgen.index))),
+#                     index=list(range(n_ts)), columns=net.sgen.index) * net.sgen.p_mw.values
+#     # create the data source from it
+#     ds = DFData(df)
+
+#     # initialising ConstControl controller to update values of the regenerative generators ("sgen" elements)
+#     # the element_index specifies which elements to update (here all sgens in the net since net.sgen.index is passed)
+#     # the controlled variable is "p_mw"
+#     # the profile_name are the columns in the csv file (here this is also equal to the sgen indices 0-N )
+#     const_sgen = ConstControl(net, element='sgen', element_index=net.sgen.index,
+#                             variable='p_mw', data_source=ds, profile_name=net.sgen.index)
+
+#     # do the same for loads
+#     # df = pd.read_csv("load_timeseries.csv")
+#     # create a DataFrame with some random time series as an example
+#     df = pd.DataFrame(np.random.normal(1., 0.1, size=(n_ts, len(net.load.index))),
+#                     index=list(range(n_ts)), columns=net.load.index) * net.load.p_mw.values
+#     ds = DFData(df)
+#     const_load = ConstControl(net, element='load', element_index=net.load.index,
+#                             variable='p_mw', data_source=ds, profile_name=net.load.index)
+
+#     # starting the timeseries simulation for one day -> 96 15 min values.
+#     run_timeseries(net)
+
 current_directory = os.getcwd()
 
 power_agent_instructions = f"""
-Developer: Developer: # Role and Objective
-You are a power systems analysis agent dedicated to delivering concise and precise answers to questions involving electrical grids or networks. Do not make assumptions beyond the data in this file or hallucinate information.
+System: # Role and Objective
+You are a power systems analysis agent dedicated to providing concise, accurate answers for queries related to electrical grids or networks. Rely exclusively on data provided within this file—do not speculate or fabricate information.
 
 # Workflow
-For anything related to pandapower, electrical grids, power flow calculation, contingency analysis, or similar topics, use the pandapower MCP server tools provided. Use user local files, meaning you juat need to download it if not found.
-For programming tasks, data analysis, or file manipulations, use the code interpreter tool. Therefore, you need to upload a local user file to the container. If not found, download it.
+- For topics involving pandapower, electrical grids, power flow calculations, contingency analysis, or similar, utilize the pandapower MCP server tools. These require user files to be present in the local filesystem; if a file is absent, download it first.
+- For coding, data analysis, or file manipulation tasks, use the code interpreter. It requires files to be located in the container directory. If the file is not present, download it locally, then upload it to the container before use.
 
-# Local directory
-{current_directory}
-
-# Container directory
-/mnt/data/
+# Directories
+- Local working directory: `{current_directory}`
+- Container working directory: `/mnt/data/`
 
 # Instructions
-1. Begin with a high-level checklist (3–7 bullets) outlining the conceptual steps required to address the user's question. Keep checklist items at the conceptual level.
-2. Use only these tools: the pandapower mcp server tools, get_network_case, upload_file_to_container and the code interpreter. Auto-invoke tools for routine read-only operations; for destructive or irreversible actions, require explicit user confirmation beforehand.
-3. Make sure to use local files (i.e not in container) with the mcp server tools. With the code interpreter, you can use files in the container.
-4. State the purpose and minimal required inputs before each significant tool call.
-5. Use the code interpreter to run Python code. For simple questions (e.g., network name, number of voltages).
-    Be clear and concise. When writing code, include relevant visualizations and dataframes (pandas) as appropriate.
-    If working with files, they need to be in the container.
-6. If necessary, break down complex questions into sub-questions, reasoning stepwise before implementation. Set reasoning_effort = medium unless task complexity is minimal or high.
-7. Develop a structured plan to address the user's question before implementation.
-8. When further information is required, use available libraries and resources within the code interpreter to provide references or foundational knowledge as needed.
-9. At key milestones, provide succinct micro-updates (1–3 sentences) summarizing progress, next steps, and any blockers.
+1. Begin with a concise checklist (3–7 bullets) of conceptual steps required to address the user's request.
+2. Use only these tools: pandapower MCP server tools, get_network_case, upload_file_to_container, and the code interpreter. Routine read-only tool operations can be auto-invoked; for destructive or irreversible actions, obtain explicit user confirmation before proceeding.
+3. When operating with MCP server tools, access files from the local directory. For the code interpreter, use files from the container directory. Before any significant tool call, clearly state its purpose and the minimal required inputs.
+4. Execute Python code strictly within the code interpreter. For simple queries (e.g., network name, voltage count), provide direct, clear responses. When writing code, include relevant visualizations and dataframes (using pandas) as needed. Ensure all required files are present in the container directory before code execution. Do not use pandapower.
+5. For complex or multi-step queries, decompose the request into sub-questions and reason step by step before coding. Set `reasoning_effort = medium` unless task complexity justifies a different level.
+6. Develop and present a structured implementation plan addressing the user's question before starting substantive execution.
+7. Use available libraries and resources within the code interpreter, offering references or foundational concepts as needed.
+8. After each tool call or code edit, briefly validate the result (1–2 lines) and determine next steps or self-correct as needed.
+9. At key milestones, give succinct (1–3 sentence) progress updates with current status, next steps, and blockers, if any.
+
+# Example
+User: I want to plot voltage levels on "network.json"
+
+System steps:
+- Fetch the network.
+- Run a power analysis (using the local file with MCP server).
+- Save the updated network.
+- Upload the network to the container.
+- Use the code interpreter to open the network in the container and plot voltage levels.
 
 # Output Format
-Be cold, concise, and brief. Present final answers using markdown, including relevant tables or plots. Always output the original user question.
+Be direct and succinct. Deliver final answers using markdown, with tables or plots as appropriate. Always quote the user question in your output.
 """
 
 class ModelSelection(BaseModel):
@@ -92,23 +117,8 @@ class ModelSelection(BaseModel):
 
 @dataclass
 class UserContext:
-    network_case: Literal["case30", "case118", "case300", "case1888rte"]
+    network_case: Literal["case30", "case118", "case300", "case1888rte", "case2848rte"]
 
-
-# class PSSE_Agent:
-#     def __init__(self, mcp_server: MCPServer):
-
-
-#         self.router_agent = Agent[UserContext](
-#             name="Router Agent",
-#             model="gpt-5-nano",
-#             instructions="Decide weather the question is simple, intermediate or complex. Your answer is only either 'gpt-5-nano', gpt-5-mini' or 'gpt-5'." \
-#             "Example: 'What is the name of the network?' -> 'gpt-5-nano'.",
-#             output_type=ModelSelection,
-#         )
-
-#         self.mcp_server = mcp_server
-     
 router_agent = Agent(
     name="Router Agent",
     model="gpt-5-nano",
@@ -150,7 +160,7 @@ async def run(question: str):
 
 @function_tool
 def get_network_case(
-                    case_name: Literal["case30", "case118", "case300", "case1888rte"]) -> str:
+                    case_name: Literal["case30", "case118", "case300", "case1888rte", "case2848rte"]) -> str:
     """
     Retrieves a predefined pandapower network case by name and saves it to JSON file on the current directory.
 
@@ -162,7 +172,8 @@ def get_network_case(
         "case30": case30,
         "case118": case118,
         "case300": case300,
-        "case1888rte": case1888rte
+        "case1888rte": case1888rte,
+        "case2848rte": case2848rte
     }
     #self.network = cases[case_name]()
     pp.to_json(cases[case_name](), f"{case_name}.json")
@@ -183,22 +194,13 @@ async def main():
     le modèle répond, et on nettoie les fichiers générés.
     """
 
-    # async with MCPServerStdio(
-    #     name="Pandapower MCP Server",
-    #     params={"command": ".venv/bin/python3.12",
-    #             "args": ["/Users/philippebergeron/Documents/Agent_Psse/PowerMCP/pandapower/panda_mcp.py"]
-    #             },
-    #     cache_tools_list=True
-    #     ) as server:
 
 
     current_directory = os.getcwd()
 
     # # Initialisation de l'agent PSSE
-    #     agent = PSSE_Agent(server)
-
         # Base directory pour les sauvegardes
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_30/"
+    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_39/"
     os.makedirs(base_directory, exist_ok=True)
 
     print("=== Conversation avec le PSSE Agent ===")
