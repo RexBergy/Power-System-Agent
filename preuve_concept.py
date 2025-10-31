@@ -41,37 +41,43 @@ def upload_file_to_container(path: str):
         return f"File '{path}' does not exist."
     
 
-# def timeseries():
-#     # load a pandapower network
-#     #net = mv_oberrhein(scenario='generation')
-#     # number of time steps
-#     n_ts = 95
-#     # load your timeseries from a file (here csv file)
-#     # df = pd.read_csv("sgen_timeseries.csv")
-#     # or create a DataFrame with some random time series as an example
-#     df = pd.DataFrame(np.random.normal(1., 0.1, size=(n_ts, len(net.sgen.index))),
-#                     index=list(range(n_ts)), columns=net.sgen.index) * net.sgen.p_mw.values
-#     # create the data source from it
-#     ds = DFData(df)
+class TaskType(BaseModel):
+    type: Literal["case_retrieval", "analysis", "visualization", "diagnostics", "other"]
 
-#     # initialising ConstControl controller to update values of the regenerative generators ("sgen" elements)
-#     # the element_index specifies which elements to update (here all sgens in the net since net.sgen.index is passed)
-#     # the controlled variable is "p_mw"
-#     # the profile_name are the columns in the csv file (here this is also equal to the sgen indices 0-N )
-#     const_sgen = ConstControl(net, element='sgen', element_index=net.sgen.index,
-#                             variable='p_mw', data_source=ds, profile_name=net.sgen.index)
+# High-level orchestrator agent
+orchestrator_agent = Agent(
+    name="Task Orchestrator",
+    model="gpt-5-mini",
+    instructions="""
+    Classify the user's question into one of these categories:
+    - case_retrieval: Loading or selecting a network case
+    - analysis: Running power flow or simulation tasks
+    - visualization: Plotting or graphing results
+    - diagnostics: Checking data quality, voltages, or grid issues
+    - other: Anything else
 
-#     # do the same for loads
-#     # df = pd.read_csv("load_timeseries.csv")
-#     # create a DataFrame with some random time series as an example
-#     df = pd.DataFrame(np.random.normal(1., 0.1, size=(n_ts, len(net.load.index))),
-#                     index=list(range(n_ts)), columns=net.load.index) * net.load.p_mw.values
-#     ds = DFData(df)
-#     const_load = ConstControl(net, element='load', element_index=net.load.index,
-#                             variable='p_mw', data_source=ds, profile_name=net.load.index)
+    Only respond with one of the above category names.
+    """,
+    output_type=TaskType,
+)
 
-#     # starting the timeseries simulation for one day -> 96 15 min values.
-#     run_timeseries(net)
+async def orchestrate_question(question: str):
+    """Top-level entrypoint that decides which flow to trigger."""
+    task = await Runner.run(orchestrator_agent, question)
+    print(f"[Orchestrator] → Task category: {task.final_output.type}")
+
+    # You can add richer routing logic here:
+    if task.final_output.type == "case_retrieval":
+        result = await run_case_retrieval(question)
+    elif task.final_output.type == "analysis":
+        result = await run(question)  # your existing power analysis flow
+    elif task.final_output.type == "visualization":
+        result = await run_visualization(question)
+    else:
+        result = f"No specialized agent found for '{task.final_output.type}'."
+
+    return result
+
 
 current_directory = os.getcwd()
 
@@ -127,6 +133,15 @@ router_agent = Agent(
     output_type=ModelSelection,
 )
      
+async def run_case_retrieval(question: str):
+    """
+    """
+
+    pass
+async def run_visualization(question):
+    pass
+
+
 async def run(question: str):
     """
 
@@ -223,7 +238,7 @@ async def main():
         # Exécution de l'agent
         start_time = time.time()
         #   result = await Runner.run(agent, modified_question, session=session)
-        result = await run(modified_question)
+        result = await orchestrate_question(modified_question)
         completed_time = time.time() - start_time
 
         # Affichage du résultat
