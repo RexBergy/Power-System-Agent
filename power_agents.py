@@ -15,11 +15,17 @@ import pandapower as pp
     
 client = OpenAI()
 
-type: Literal["case_retrieval", "analysis", "visualization", "diagnostics", "other"]
+class AgentSelection(BaseModel):
+    type: Literal["case_retrieval", "analysis", "visualization", "diagnostics", "other"]
+
+class Plan(BaseModel):
+    steps: list[str]
 
 
 class AgenticPowerSystem:
-    def __init__(self):
+    def __init__(self, session: SQLiteSession):
+
+        self.session = session
 
         self.mcp_server = MCPServerStdio(
             name="Pandapower MCP Server",
@@ -30,6 +36,38 @@ class AgenticPowerSystem:
             client_session_timeout_seconds=30
         )
         
+        self.planner_agent = Agent(
+            name="Power System Planner Agent",
+            model="gpt-5-nano",
+            instructions="""Given a user input, create a sequential plan with steps to address the user's request.
+            
+            Decompose the user input into sub-tasks (1-5 steps) that can be handled by specialized agents.
+            The following agents are availble:
+            - Case Retrieval Agent: for retrieving pandapower test cases
+            - Power Systems Analysis Agent: for powerflow, contingency and timeseries analysis
+            - Visualization Agent: for data visulization tasks
+            - Diagnostics Agent: for diagnosing issues in power system networks
+            - Other Agent: for general power system tasks and broader topics not covered by other agents
+
+            Your output must be a list of steps where give the chossen agent and instruction.
+            """,
+            output_type=Plan
+        )
+
+        self.selection_agent = Agent(
+            name="Agent Selection Agent",
+            model="gpt-5-nano",
+            instructions="""Given a user input, select the most appropriate agent to hadle the request.
+            The following agents are availble:
+            - Case Retrieval Agent: for retrieving pandapower test cases
+            - Power Systems Analysis Agent: for powerflow, contingency and timeseries analysis
+            - Visualization Agent: for data visulization tasks
+            - Diagnostics Agent: for diagnosing issues in power system networks
+            - Other Agent: for general power system tasks and broader topics not covered by other agents
+            Your answer must be one of the following:
+            'case_retrieval', 'analysis', 'visualization', diagnostics', 'other'.""",
+            output_type=AgentSelection
+        )
 
         self.model_router_agent = Agent(
             name="Router Agent",
@@ -78,6 +116,32 @@ class AgenticPowerSystem:
             instructions=other_agent_instructions
         )
 
+    async def run(self, user_input: str):
+
+        plan = await Runner.run(self.planner_agent, user_input, session=self.session)
+        print("Generated Plan: ", plan.final_output.steps)
+
+        for step in plan.final_output.steps:
+            print(f"\nExecuting step: {step}")
+
+            selected_agent = await Runner.run(self.selection_agent, step, session=self.session)
+            print(f"Selected agent: {selected_agent.final_output.type}")
+            selected_agent = selected_agent.final_output.type
+
+            if selected_agent == "case_retrieval":
+                agent = self.case_retrieval_agent
+            elif selected_agent == "analysis":
+                agent = self.analysis_agent
+            elif selected_agent == "visualization":
+                agent = self.visualization_agent
+            elif selected_agent == "diagnostics":
+                agent = self.diagnostics_agent
+            else:
+                agent = self.other_agent
+
+            result = await Runner.run(agent,step, session=self.session)
+
+        return result
 ############## Router ####################
 
 class ModelSelection(BaseModel):
