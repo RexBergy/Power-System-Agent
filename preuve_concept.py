@@ -1,6 +1,7 @@
 
-from agents import  CodeInterpreterTool, SQLiteSession
-from power_agents import AgenticPowerSystem
+from agents import  SQLiteSession
+from agents.mcp import MCPServerStdio
+from power_agents import AgenticPowerSystem, CONTAINER
 import asyncio
 import time
 
@@ -11,25 +12,13 @@ client = OpenAI()
 
     
 session = SQLiteSession("conversation_40")
-container = client.containers.create(name="test-container")
 
-code_interpreter = CodeInterpreterTool(tool_config={"type": "code_interpreter", "container": container.id})
-
-
-
-async def main():
-    """
-    Boucle de conversation CLI avec le PSSE agent.
-    Chaque tour, l'utilisateur entre une question,
-    le modèle répond, et on nettoie les fichiers générés.
-    """
-
-    system = AgenticPowerSystem(session=session)
-
+async def run_system(agent_system):
 
     # # Initialisation de l'agent PSSE
-        # Base directory pour les sauvegardes
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_41/"
+    # Base directory pour les sauvegardes
+
+    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_48/"
     os.makedirs(base_directory, exist_ok=True)
 
     print("=== Conversation avec le PSSE Agent ===")
@@ -52,8 +41,8 @@ async def main():
         # Exécution de l'agent
         start_time = time.time()
         #   result = await Runner.run(agent, modified_question, session=session)
-       # result = await orchestrate_question(modified_question)
-        result = await system.run(modified_question)
+    # result = await orchestrate_question(modified_question)
+        result = await agent_system.run(modified_question)
         completed_time = time.time() - start_time
 
         # Affichage du résultat
@@ -66,7 +55,7 @@ async def main():
         with open(os.path.join(question_dir, "output.txt"), "w") as f:
             f.write(result.final_output + f"\n\n(Temps d'exécution : {completed_time:.2f} secondes)")
 
-        for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(container.id)):
+        for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(CONTAINER.id)):
             print(f" - {file.path}")
 
             # Retrieve and save each file to the specific question directory
@@ -76,18 +65,41 @@ async def main():
             )
             client.containers.files.content.retrieve(
                 file_id=file.id,
-                container_id=container.id
+                container_id=CONTAINER.id
             ).write_to_file(destination_path)
 
         # Nettoyage éventuel du conteneur si nécessaire
         try:
-            for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(container.id)):
-                client.containers.files.delete(file_id=file.id, container_id=container.id)
+            for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(CONTAINER.id)):
+                client.containers.files.delete(file_id=file.id, container_id=CONTAINER.id)
         except Exception as e:
             print(f"(Avertissement : impossible de nettoyer le conteneur — {e})")
 
         i += 1
 
+
+async def main():
+    """
+    Boucle de conversation CLI avec le PSSE agent.
+    Chaque tour, l'utilisateur entre une question,
+    le modèle répond, et on nettoie les fichiers générés.
+    """
+
+    async with MCPServerStdio(
+            name="Pandapower MCP Server",
+            params={"command": ".venv/bin/python3.12",
+                    "args": ["/Users/philippebergeron/Documents/Agent_Psse/PowerMCP/pandapower/panda_mcp.py"]
+                    },
+            cache_tools_list=True,
+            client_session_timeout_seconds=30
+        ) as mcp_server:
+
+        system = AgenticPowerSystem(session=session, mcp_server=mcp_server)
+
+        await run_system(system)
+        
+        
+
 if __name__ == "__main__":
     asyncio.run(main())
-    client.containers.delete(container_id=container.id)
+    client.containers.delete(container_id=CONTAINER.id)
