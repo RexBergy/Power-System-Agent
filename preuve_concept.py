@@ -2,6 +2,9 @@
 from agents import  SQLiteSession
 from agents.mcp import MCPServerStdio
 from power_agents import AgenticPowerSystem, CONTAINER
+from power_agents_variant1 import AgenticPowerSystem as AgenticPowerSystemVariant1
+from power_agents_variant1 import CONTAINER as CONTAINER_VARIENT1
+from agents.extensions.visualization import draw_graph
 import asyncio
 import time
 
@@ -18,7 +21,7 @@ async def run_system(agent_system):
     # # Initialisation de l'agent PSSE
     # Base directory pour les sauvegardes
 
-    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_48/"
+    base_directory = "/Users/philippebergeron/Documents/Agent_Psse/Power-System-Agent/conversations/conversation_51/"
     os.makedirs(base_directory, exist_ok=True)
 
     print("=== Conversation avec le PSSE Agent ===")
@@ -55,7 +58,7 @@ async def run_system(agent_system):
         with open(os.path.join(question_dir, "output.txt"), "w") as f:
             f.write(result.final_output + f"\n\n(Temps d'exécution : {completed_time:.2f} secondes)")
 
-        for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(CONTAINER.id)):
+        for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(CONTAINER_VARIENT1.id)):
             print(f" - {file.path}")
 
             # Retrieve and save each file to the specific question directory
@@ -65,13 +68,13 @@ async def run_system(agent_system):
             )
             client.containers.files.content.retrieve(
                 file_id=file.id,
-                container_id=CONTAINER.id
+                container_id=CONTAINER_VARIENT1.id
             ).write_to_file(destination_path)
 
         # Nettoyage éventuel du conteneur si nécessaire
         try:
-            for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(CONTAINER.id)):
-                client.containers.files.delete(file_id=file.id, container_id=CONTAINER.id)
+            for file in filter(lambda x: x.id.startswith("cfile") ,client.containers.files.list(CONTAINER_VARIENT1.id)):
+                client.containers.files.delete(file_id=file.id, container_id=CONTAINER_VARIENT1.id)
         except Exception as e:
             print(f"(Avertissement : impossible de nettoyer le conteneur — {e})")
 
@@ -94,12 +97,15 @@ async def main():
             client_session_timeout_seconds=30
         ) as mcp_server:
 
-        system = AgenticPowerSystem(session=session, mcp_server=mcp_server)
+        system = AgenticPowerSystemVariant1(session=session, mcp_server=mcp_server)
 
-        await run_system(system)
+        draw_graph(system.orchestrator_agent, "graph.png")
+        
+
+      #  await run_system(system)
         
         
 
 if __name__ == "__main__":
     asyncio.run(main())
-    client.containers.delete(container_id=CONTAINER.id)
+    client.containers.delete(container_id=CONTAINER_VARIENT1.id)

@@ -4,6 +4,7 @@ from agents import Agent, ModelSettings, Runner, function_tool, CodeInterpreterT
 from pandapower.networks.power_system_test_cases import case30, case1888rte, case300, case118, case2848rte
 from openai.types.shared import Reasoning
 
+
 from openai import OpenAI
 import os
 import time
@@ -59,50 +60,7 @@ class AgenticPowerSystem:
 
         self.mcp_server = mcp_server
         
-        self.planner_agent = Agent(
-            name="Power System Planner Agent",
-            model="gpt-5-nano",
-            instructions=f"""Given a user input, create a sequential plan with steps to address the user's request.
-            
-            Decompose the user input into sub-tasks (1-7 steps) that can be handled by specialized agents.
-            The following agents are availble:
-            - Case Retrieval Agent: for retrieving pandapower test cases. (Instructions: 
-                Given a request for a power system test case, retrieve the appropriate pandapower test using the following tool: 
-                    - get_network_case
-            )   
-            - Upload Agent: for uploading files to the code interpreter container. (Instructions: 
-                You are an upload agent specialized in uploading files to the code interpreter container.
-                Output the input file path and the upload file path only.
-                )
-            - Analysis Agent: only for powerflow, contingency and timeseries analysis only. ( Instructions: {power_agent_instructions} )
-            - Pandas Agent: for data manipulation tasks. Needs to upload data files before code interpretor. ( Instructions:
-                You are a data analysis agent specializing in data manipulation using pandas.
-                Before using the code interpreter tool, upload any required data files using the upload_file tool.
-                Use the code interpreter tool to execute python code for data analysis tasks.
-                
-                Upload any required data files using the upload_file_to_container tool before analysis.
-                Use the minimal code necessary to perform the analysis requested.
-                )
-            - Visualization Agent: for data visulization tasks. Needs to upload data files before code interpretor. (Instructions: {visualization_agent_instructions} )
-            - Diagnostics Agent: for diagnosing issues in power system networks. ( Instructions: {diagnostics_agent_instructions})
-            - Other Agent: for general power system tasks and broader topics not covered by other agents. ( Instructions: {other_agent_instructions})
-
-            Ensure that everytime a file is created or needed, you upload it using the upload agent.
-
-            Each step must be the prompt you will give to the chosen agent to handle that step.
-
-            Example input: "I want to plot the voltage levels of case30."
-            Example ouput: [
-            Case Retrieval Agent: "Retrieve the pandapower test case 'case30' using the get_network_case_tool",
-            Pandapower Analysis Agent: "Run a power flow analysis on the retrieved 'case30' network using the pandapower mcp server tools, save the results in a different jsno filename."
-            Upload Agent: "Upload the saved json file to the code interpreter container using the upload_file_to_container tool",
-            Pandas Agent: "Load the uploaded json file and extract the voltage levels data using pandas and plot it using matplotlib in the code interpreter tool."
-            ]
-
-            Your output must be a list of steps where give the chossen agent and instruction.
-            """,
-            output_type=Plan
-        )
+        
 
         self.upload_agent = Agent(
             name="Upload Agent",
@@ -188,35 +146,102 @@ class AgenticPowerSystem:
             instructions=other_agent_instructions
         )
 
+        self.planner_agent = Agent(
+            name="Planner Agent",
+            model="gpt-5-nano",
+            instructions=f"""Given a user input, create a sequential plan with steps to address the user's request and then execute it.
+            
+            Decompose the user input into sub-tasks (1-7 steps) that can be handled by specialized agents.
+            The following agents are availble:
+            - Case Retrieval Agent: for retrieving pandapower test cases. (Instructions: 
+                Given a request for a power system test case, retrieve the appropriate pandapower test using the following tool: 
+                    - get_network_case
+            )   
+            - Upload Agent: for uploading files to the code interpreter container. (Instructions: 
+                You are an upload agent specialized in uploading files to the code interpreter container.
+                Output the input file path and the upload file path only.
+                )
+            - Analysis Agent: only for powerflow, contingency and timeseries analysis only. ( Instructions: {power_agent_instructions} )
+            - Pandas Agent: for data manipulation tasks. Needs to upload data files before code interpretor. ( Instructions:
+                You are a data analysis agent specializing in data manipulation using pandas.
+                Before using the code interpreter tool, upload any required data files using the upload_file tool.
+                Use the code interpreter tool to execute python code for data analysis tasks.
+                
+                Upload any required data files using the upload_file_to_container tool before analysis.
+                Use the minimal code necessary to perform the analysis requested.
+                )
+            - Visualization Agent: for data visulization tasks. Needs to upload data files before code interpretor. (Instructions: {visualization_agent_instructions} )
+            - Diagnostics Agent: for diagnosing issues in power system networks. ( Instructions: {diagnostics_agent_instructions})
+            - Other Agent: for general power system tasks and broader topics not covered by other agents. ( Instructions: {other_agent_instructions})
+
+            Ensure that everytime a file is created or needed, you upload it using the upload agent.
+
+            Each step must be the prompt you will give to the chosen agent to handle that step.
+
+            Example input: "I want to plot the voltage levels of case30."
+            Example ouput: [
+            Case Retrieval Agent: "Retrieve the pandapower test case 'case30' using the get_network_case_tool",
+            Pandapower Analysis Agent: "Run a power flow analysis on the retrieved 'case30' network using the pandapower mcp server tools, save the results in a different jsno filename."
+            Upload Agent: "Upload the saved json file to the code interpreter container using the upload_file_to_container tool",
+            Pandas Agent: "Load the uploaded json file and extract the voltage levels data using pandas and plot it using matplotlib in the code interpreter tool."
+            ]
+
+            Your output must be the plan
+            """,
+            
+          #  output_type=Plan
+        )
+
+
+        self.orchestrator_agent = Agent(
+            name="Power System Orchestrator Agent",
+            model="gpt-5",
+            instructions=f"""You are an orchestrator agent that responds to user inputs in power systems analysis.
+            Try to answer yourself. If you can't, create a plan with the planner agent and execute it step by step using the specialized agents available.
+
+            Specialized agents available:
+                - Planner Agent: for creating a sequential plan to address the user's request with the agents below
+                - Case Retrieval Agent: for retrieving pandapower test cases. (Instructions: 
+                Given a request for a power system test case, retrieve the appropriate pandapower test using the following tool: 
+                    - get_network_case
+                )   
+                - Upload Agent: for uploading files to the code interpreter container. (Instructions: 
+                    You are an upload agent specialized in uploading files to the code interpreter container.
+                    Output the input file path and the upload file path only.
+                    )
+                - Analysis Agent: only for powerflow, contingency and timeseries analysis only. ( Instructions: {power_agent_instructions} )
+                - Pandas Agent: for data manipulation tasks. Needs to upload data files before code interpretor. ( Instructions:
+                    You are a data analysis agent specializing in data manipulation using pandas.
+                    Before using the code interpreter tool, upload any required data files using the upload_file tool.
+                    Use the code interpreter tool to execute python code for data analysis tasks.
+                    
+                    Upload any required data files using the upload_file_to_container tool before analysis.
+                    Use the minimal code necessary to perform the analysis requested.
+                    )
+                - Visualization Agent: for data visulization tasks. Needs to upload data files before code interpretor. (Instructions: {visualization_agent_instructions} )
+                - Diagnostics Agent: for diagnosing issues in power system networks. ( Instructions: {diagnostics_agent_instructions})
+                - Other Agent: for general power system tasks and broader topics not covered by other agents. ( Instructions: {other_agent_instructions})
+
+            When executing a plan step by step clearly state which step you are executing
+            """,
+            handoffs=[self.planner_agent,
+                      self.pandas_agent, 
+                      self.visualization_agent, 
+                      self.analysis_agent, 
+                      self.case_retrieval_agent, 
+                      self.upload_agent, 
+                      self.diagnostics_agent, 
+                      self.other_agent
+                      ]
+        )
+
+        
+
     async def run(self, user_input: str):
 
-        plan = await Runner.run(self.planner_agent, user_input, session=self.session)
-        print("Generated Plan: ", plan.final_output.steps)
-
-        for step in plan.final_output.steps:
-            print(f"\nExecuting step: {step}")
-
-            selected_agent = await Runner.run(self.selection_agent, step, session=self.session)
-            print(f"Selected agent: {selected_agent.final_output.type}")
-            selected_agent = selected_agent.final_output.type
-
-            if selected_agent == "case_retrieval":
-                agent = self.case_retrieval_agent
-            elif selected_agent == "analysis":
-                agent = self.analysis_agent
-            elif selected_agent == "visualization":
-                agent = self.visualization_agent
-            elif selected_agent == "diagnostics":
-                agent = self.diagnostics_agent
-            elif selected_agent == "pandas":
-                agent = self.pandas_agent
-            elif selected_agent == "upload":
-                agent = self.upload_agent
-            else:
-                agent = self.other_agent
-
-            result = await Runner.run(agent,step, session=self.session)
-        return result
+        plan = await Runner.run(self.orchestrator_agent, user_input, session=self.session)
+   
+        return plan
 ############## Router ####################
 
 class ModelSelection(BaseModel):
