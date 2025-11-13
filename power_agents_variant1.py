@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 from agents import Agent, ModelSettings, Runner, function_tool, CodeInterpreterTool, SQLiteSession
 
 from pandapower.networks.power_system_test_cases import case30, case1888rte, case300, case118, case2848rte
@@ -54,7 +54,7 @@ class Plan(BaseModel):
 
 
 class AgenticPowerSystem:
-    def __init__(self, session: SQLiteSession, mcp_server):
+    def __init__(self, session: Optional[SQLiteSession], mcp_server):
 
         self.session = session
 
@@ -224,15 +224,47 @@ class AgenticPowerSystem:
 
             When executing a plan step by step clearly state which step you are executing
             """,
-            handoffs=[self.planner_agent,
-                      self.pandas_agent, 
-                      self.visualization_agent, 
-                      self.analysis_agent, 
-                      self.case_retrieval_agent, 
-                      self.upload_agent, 
-                      self.diagnostics_agent, 
-                      self.other_agent
-                      ]
+            tools=[
+                self.planner_agent.as_tool(
+                    tool_name="planner_agent",
+                    tool_description="For creating a sequential plan to address the user's request with the agents below"
+                ),
+                self.pandas_agent.as_tool(
+                    tool_name="pandas_agent",
+                    tool_description="For data manipulation tasks. Needs to upload data files before code interpretor"
+                    
+                ), 
+                self.visualization_agent.as_tool(
+                    tool_name="visualization_agent",
+                    tool_description="For data visulization tasks. Needs to upload data files before code interpretor"
+
+                ), 
+                self.analysis_agent.as_tool(
+                    tool_name="analysis_agent",
+                    tool_description="Only for powerflow, contingency and timeseries analysis only"
+
+                ), 
+                self.case_retrieval_agent.as_tool(
+                    tool_name="case_retrieval_agent",
+                    tool_description="For retrieving pandapower test cases"
+
+                ), 
+                self.upload_agent.as_tool(
+                    tool_name="upload_agent",
+                    tool_description="For uploading files to the code interpreter container"
+
+                ), 
+                self.diagnostics_agent.as_tool(
+                    tool_name="diagnostics_agent",
+                    tool_description="For diagnosing issues in power system networks."
+
+                ), 
+                self.other_agent.as_tool(
+                    tool_name="other_agent",
+                    tool_description="For general power system tasks and broader topics not covered by other agents"
+
+                )
+            ]
         )
 
         

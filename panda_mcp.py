@@ -2,9 +2,15 @@ from typing import Dict, List, Optional, Tuple, Any, Union
 import pandapower as pp
 from mcp.server.fastmcp import FastMCP
 import logging
+import pandas as pd
+import numpy as np
+from pandapower.timeseries.data_sources.frame_data import DFData
+from pandapower.control import ConstControl
+from pandapower.timeseries import run_timeseries
 
 import sys
 import os
+import json as js
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.utils import PowerError, power_mcp_tool
@@ -117,9 +123,9 @@ def run_power_flow(algorithm: str = 'nr', calculate_voltage_angles: bool = True,
         tolerance_mva: Convergence tolerance in MVA
         
     Returns:
-        Dict containing power flow results
+        Message with status and saved path results
     """
-    logger.info("Running power flow analysis")
+    logger.info(f"Running power flow analysis")
     try:
         net = _get_network()
         pp.runpp(net, algorithm=algorithm, calculate_voltage_angles=calculate_voltage_angles,
@@ -127,17 +133,22 @@ def run_power_flow(algorithm: str = 'nr', calculate_voltage_angles: bool = True,
         
         # Extract key results
         results = {
-  #          "bus_results": net.res_bus.to_dict(),
-  #          "line_results": net.res_line.to_dict(),
-  #          "trafo_results": net.res_trafo.to_dict(),
+            "bus_results": net.res_bus.to_dict(),
+            "line_results": net.res_line.to_dict(),
+            "trafo_results": net.res_trafo.to_dict(),
             "converged": net.converged
         }
-        
-        return {
-            "status": "success",
-            "message": "Power flow calculation completed successfully" if net.converged else "Power flow did not converge",
-            "results": results
-        }
+        # with open(save_file, "r") as f:
+        #     js.dump(
+        #         {
+        #         "status": "success",
+        #         "message": "Power flow calculation completed successfully" if net.converged else "Power flow did not converge",
+        #         "results": results
+        #         },
+        #         f
+        #     )
+
+        return f"Powerflow completed sucessfully. Converged: {net.converged}"
     except RuntimeError as re:
         return PowerError(
             status="error",
@@ -150,18 +161,20 @@ def run_power_flow(algorithm: str = 'nr', calculate_voltage_angles: bool = True,
         )
 
 @power_mcp_tool(mcp)
-def run_contingency_analysis(contingency_type: str = "N-1", 
+def run_contingency_analysis(save_file : str,
+                            contingency_type: str = "N-1", 
                            elements: Optional[List[str]] = None) -> Dict[str, Any]:
     """Run contingency analysis on the current network.
     
     Args:
+        save_file: A json file path (.json) to save the results
         contingency_type: Type of contingency analysis ("N-1" or "N-2")
         elements: List of specific elements to analyze (optional)
         
     Returns:
-        Dict containing contingency analysis results
+        Message with status and saved path results
     """
-    logger.info("Running contingency analysis")
+    logger.info(f"Running contingency analysis in {save_file}")
     try:
         net = _get_network()
         
@@ -197,7 +210,7 @@ def run_contingency_analysis(contingency_type: str = "N-1",
                     results.append({
                         'contingency': f"{element_type}_{idx}",
                         'converged': contingency_net.converged,
-  #                      'violations': violations
+                        'violations': violations
                     })
                     
                 except Exception as e:
@@ -207,11 +220,16 @@ def run_contingency_analysis(contingency_type: str = "N-1",
                         'error': str(e)
                     })
         
-        return {
-            "status": "success",
-            "message": "Contingency analysis completed",
-            "results": results
-        }
+        with open(save_file,"w") as f:
+            js.dump(
+                {
+                "status": "success",
+                "message": "Contingency analysis completed",
+                "results": results
+                },
+                f
+            )
+        return f"Contingency analysis completed succesfully and saved to {save_file}"
     except RuntimeError as re:
         return PowerError(
             status="error",
@@ -329,6 +347,46 @@ def add_line(from_bus: int, to_bus: int, length: float, std_type: str, name: Opt
         raise RuntimeError(f"Failed to add line: {str(re)}")
     except Exception as e:
         raise RuntimeError(f"Failed to add line: {str(e)}")
+
+@power_mcp_tool(mcp)  
+def timeseries(time_steps: int):
+    """
+    Runs a timeseries on the network
+
+    Args:
+        time_steps: Number of time steps
+    """
+    # load a pandapower network
+    #net = mv_oberrhein(scenario='generation')
+    # number of time steps
+    n_ts = time_steps
+    net = _get_network()
+    # load your timeseries from a file (here csv file)
+    # df = pd.read_csv("sgen_timeseries.csv")
+    # or create a DataFrame with some random time series as an example
+    df = pd.DataFrame(np.random.normal(1., 0.1, size=(n_ts, len(net.sgen.index))),
+                    index=list(range(n_ts)), columns=net.sgen.index) * net.sgen.p_mw.values
+    # create the data source from it
+    ds = DFData(df)
+
+    # initialising ConstControl controller to update values of the regenerative generators ("sgen" elements)
+    # the element_index specifies which elements to update (here all sgens in the net since net.sgen.index is passed)
+    # the controlled variable is "p_mw"
+    # the profile_name are the columns in the csv file (here this is also equal to the sgen indices 0-N )
+    const_sgen = ConstControl(net, element='sgen', element_index=net.sgen.index,
+                            variable='p_mw', data_source=ds, profile_name=net.sgen.index)
+
+    # do the same for loads
+    # df = pd.read_csv("load_timeseries.csv")
+    # create a DataFrame with some random time series as an example
+    df = pd.DataFrame(np.random.normal(1., 0.1, size=(n_ts, len(net.load.index))),
+                    index=list(range(n_ts)), columns=net.load.index) * net.load.p_mw.values
+    ds = DFData(df)
+    const_load = ConstControl(net, element='load', element_index=net.load.index,
+                            variable='p_mw', data_source=ds, profile_name=net.load.index)
+
+    # starting the timeseries simulation for one day -> 96 15 min values.
+    run_timeseries(net)
 
 
     
