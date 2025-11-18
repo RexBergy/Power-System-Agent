@@ -209,3 +209,5 @@ __marimo__/
 # questions
 questions/
 conversations/
+.deepeval
+qa_results*
