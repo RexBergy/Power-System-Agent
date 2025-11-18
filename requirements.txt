@@ -2,4 +2,4 @@ openai
 openai-agents
 pandapower
 pandas
-deepval
+deepeval
