@@ -60,7 +60,7 @@ from agents.mcp import MCPServerStdio
 from power_agents_variant1 import AgenticPowerSystem as AgenticPowerSystemVariant1
 
 # === Load QA data ===
-with open("qa_results.csv", newline='', encoding='utf-8') as csvfile:
+with open("qa_results-3.csv", newline='', encoding='utf-8') as csvfile:
     qa_data = list(csv.DictReader(csvfile))
 
 # === Prepare MCP server and system ===
@@ -84,6 +84,7 @@ correctness_metric = GEval(
     evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.EXPECTED_OUTPUT],
     threshold=0.5,
 )
+
 
 # === Dynamically create one test per question ===
 for i, qa in enumerate(qa_data):

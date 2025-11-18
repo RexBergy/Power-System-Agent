@@ -162,6 +162,7 @@ class AgenticPowerSystem:
                 Output the input file path and the upload file path only.
                 )
             - Analysis Agent: only for powerflow, contingency and timeseries analysis only. ( Instructions: {power_agent_instructions} )
+                Results are written to json files. Upload them to further work with them.
             - Pandas Agent: for data manipulation tasks. Needs to upload data files before code interpretor. ( Instructions:
                 You are a data analysis agent specializing in data manipulation using pandas.
                 Before using the code interpreter tool, upload any required data files using the upload_file tool.
@@ -210,6 +211,7 @@ class AgenticPowerSystem:
                     Output the input file path and the upload file path only.
                     )
                 - Analysis Agent: only for powerflow, contingency and timeseries analysis only. ( Instructions: {power_agent_instructions} )
+                    Results are written to json files. Upload them to further work with them.
                 - Pandas Agent: for data manipulation tasks. Needs to upload data files before code interpretor. ( Instructions:
                     You are a data analysis agent specializing in data manipulation using pandas.
                     Before using the code interpreter tool, upload any required data files using the upload_file tool.
@@ -222,7 +224,9 @@ class AgenticPowerSystem:
                 - Diagnostics Agent: for diagnosing issues in power system networks. ( Instructions: {diagnostics_agent_instructions})
                 - Other Agent: for general power system tasks and broader topics not covered by other agents. ( Instructions: {other_agent_instructions})
 
-            When executing a plan step by step clearly state which step you are executing
+            When executing a plan step by step clearly state which step you are executing.
+
+            ### Always execute your plan. Do not ask or do follow ups. Do it and give the answer.
             """,
             tools=[
                 self.planner_agent.as_tool(
@@ -401,3 +405,6 @@ System: Assist with general power system analysis tasks and other user questions
 
 
 ####### Exectuer Agent #########
+
+
+### On a vraiment de meilleurs 
