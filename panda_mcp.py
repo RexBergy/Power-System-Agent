@@ -148,7 +148,8 @@ def run_power_flow(algorithm: str = 'nr', calculate_voltage_angles: bool = True,
         #         f
         #     )
 
-        return f"Powerflow completed sucessfully. Converged: {net.converged}"
+        return {"status": "success",
+                "message": f"Powerflow completed sucessfully. Converged: {net.converged}"}
     except RuntimeError as re:
         return PowerError(
             status="error",
@@ -229,7 +230,8 @@ def run_contingency_analysis(save_file : str,
                 },
                 f
             )
-        return f"Contingency analysis completed succesfully and saved to {save_file}"
+        return {"statis": "success",
+                "message": f"Contingency analysis completed succesfully and saved to {save_file}"}
     except RuntimeError as re:
         return PowerError(
             status="error",
@@ -279,7 +281,7 @@ def get_network_info() -> Dict[str, Any]:
             message=f"Failed to get network information: {str(e)}"
         )
 @power_mcp_tool(mcp)  
-def add_bus(name: str, vn_kv: float, type: str = 'b', zone: Optional[str] = None) -> int:
+def add_bus(name: str, vn_kv: float, type: str = 'b', zone: Optional[str] = None) -> Dict[str,Any]:
     """Add a bus to the current network.
     
     Args:
@@ -295,14 +297,15 @@ def add_bus(name: str, vn_kv: float, type: str = 'b', zone: Optional[str] = None
     try:
         net = _get_network()
         bus_idx = pp.create_bus(net, vn_kv=vn_kv, name=name, type=type, zone=zone)
-        return bus_idx
+        return {"status": "success",
+                "bus_index": bus_idx}
     except RuntimeError as re:
         raise RuntimeError(f"Failed to add bus: {str(re)}")
     except Exception as e:
         raise RuntimeError(f"Failed to add bus: {str(e)}")
     
 @power_mcp_tool(mcp)
-def add_line(from_bus: int, to_bus: int, length: float, std_type: str, name: Optional[str] = None) -> int:
+def add_line(from_bus: int, to_bus: int, length: float, std_type: str, name: Optional[str] = None) -> Dict[str, Any]:
     """Add a line to the current network. 
     Standards:
     NAYY 4x50 SE
@@ -341,7 +344,8 @@ def add_line(from_bus: int, to_bus: int, length: float, std_type: str, name: Opt
         line_idx = pp.create_line(net, from_bus=from_bus, to_bus=to_bus,
                                   length_km=length, std_type=std_type, name=name)
 
-        return line_idx
+        return {"status": "success",
+                "line_index": line_idx}
 
     except RuntimeError as re:
         raise RuntimeError(f"Failed to add line: {str(re)}")
