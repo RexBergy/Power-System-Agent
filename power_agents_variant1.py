@@ -407,4 +407,8 @@ System: Assist with general power system analysis tasks and other user questions
 ####### Exectuer Agent #########
 
 
-### On a vraiment de meilleurs 
+### Que reste-t-il a faire
+
+# Il reste a enregistrer les resultats, je dois avoir plus de questions aussi 
+# la bonne chose cest que jai les resultats dans confidant AI
+# Il faudrait que je mette en place un systeme de base, un plus complexe et le mien
